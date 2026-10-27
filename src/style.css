@@ -1,0 +1,23 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background-color: #0b0813;
+  color: #f5efff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  --margin: 20px;
+  margin: 0px;
+  height: calc(100vh - 0px);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  display: block;
+}
