@@ -110,7 +110,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/rotten_cherry.svg'
+        sprite: 'assets/rotten_cherry.svg'
     },
     {
         tier: 1,
@@ -126,7 +126,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/rotten_cherries.svg'
+        sprite: 'assets/rotten_cherries.svg'
     },
     {
         tier: 2,
@@ -141,7 +141,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/rotten_pear.svg'
+        sprite: 'assets/rotten_pear.svg'
     },
     {
         tier: 3,
@@ -157,7 +157,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/rotten_apple.svg'
+        sprite: 'assets/rotten_apple.svg'
     },
     {
         tier: 4,
@@ -172,7 +172,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/squash.svg'
+        sprite: 'assets/squash.svg'
     },
     {
         tier: 5,
@@ -187,7 +187,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/pumpkin.svg'
+        sprite: 'assets/pumpkin.svg'
     },
     {
         tier: 7,
@@ -202,7 +202,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/vampire.svg'
+        sprite: 'assets/vampire.svg'
     },
     {
         tier: 7,
@@ -217,7 +217,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/weird-fruit.svg'
+        sprite: 'assets/weird-fruit.svg'
     },
     {
         tier: 8,
@@ -232,7 +232,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/rounded-pumpkin.svg'
+        sprite: 'assets/rounded-pumpkin.svg'
     },
     {
         tier: 9,
@@ -247,7 +247,7 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/another-pumpkin.svg'
+        sprite: 'assets/another-pumpkin.svg'
     },
     {
         tier: 10,
@@ -262,6 +262,6 @@ export const FRUIT_TIERS = [
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
-        sprite: '/assets/big-pumpkin.svg'
+        sprite: 'assets/big-pumpkin.svg'
     }
 ];
