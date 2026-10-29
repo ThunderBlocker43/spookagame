@@ -29,17 +29,26 @@ export const RESULT_REASONS = {
     FORFEIT: 'forfeit'  // someone left or lost their connection
 };
 
+// Match length by id (see BATTLE_CONFIG.matchLengths); unknown ids fall back to the default
+export const findMatchLength = (id) => {
+    const lengths = BATTLE_CONFIG.matchLengths;
+    return lengths.find((length) => length.id === id)
+        || lengths.find((length) => length.id === BATTLE_CONFIG.defaultMatchLength);
+};
+
 const EVENTS = ['hello', 'start', 'drop', 'snap', 'out', 'final', 'result', 'leave', 'rematch', 'decline'];
 
 export class BattleMatch {
     // handlers: onPhase, onOpponent(info | null), onDrop, onSnapshot, onOpponentOut,
     // onResult, onStatus(text), onRematch(code), onDecline, onError(code), getMyScore
-    constructor(battleService, { code, role, myName, handlers }) {
+    // lengthId: picked by the host; the guest takes it from the host's "start"
+    constructor(battleService, { code, role, myName, lengthId, handlers }) {
         this.service = battleService;
         this.code = code;
         this.role = role;
         this.myName = myName;
         this.handlers = handlers;
+        this.matchLength = findMatchLength(lengthId);
 
         // Presence key: random per tab, never the private player id
         this.clientId = crypto.randomUUID();
@@ -122,10 +131,30 @@ export class BattleMatch {
         return Math.max(0, this.playStartsAt - Date.now());
     }
 
+    // Endless matches have no clock; only an overflow or a forfeit ends them
+    get isEndless() {
+        return this.matchLength.durationMs === null;
+    }
+
+    // Timed matches only (Endless has no time limit)
     get timeRemainingMs() {
-        if (this.phase === MATCH_PHASES.COUNTDOWN) return BATTLE_CONFIG.matchDurationMs;
+        if (this.phase === MATCH_PHASES.COUNTDOWN) return this.matchLength.durationMs;
         if (this.phase !== MATCH_PHASES.PLAYING) return 0;
         return Math.max(0, this.matchEndsAt - Date.now());
+    }
+
+    get elapsedMs() {
+        return Math.max(0, Date.now() - this.playStartsAt);
+    }
+
+    // Time allowed for a piece that became droppable at turnStartedAt.
+    // Timed matches: a fixed dropTimerMs. Endless: halves every halfLifeMs of
+    // match time, never below floorMs.
+    dropTimerMsFor(turnStartedAt) {
+        if (!this.isEndless) return BATTLE_CONFIG.dropTimerMs;
+        const { startMs, halfLifeMs, floorMs } = BATTLE_CONFIG.endlessDropTimer;
+        const elapsed = Math.max(0, turnStartedAt - this.playStartsAt);
+        return Math.max(floorMs, startMs * Math.pow(0.5, elapsed / halfLifeMs));
     }
 
     // ------------------------------------------
@@ -169,7 +198,7 @@ export class BattleMatch {
         if (this.phase === MATCH_PHASES.WAITING) {
             if (this.isHost) {
                 this.beginCountdown(0);
-                this.send('start', { elapsedMs: 0 });
+                this.send('start', { elapsedMs: 0, length: this.matchLength.id });
             } else {
                 this.send('hello');
             }
@@ -214,11 +243,12 @@ export class BattleMatch {
             case 'hello':
                 // Guest is (back) in the room; tell it where the match stands
                 if (this.isHost && (this.phase === MATCH_PHASES.COUNTDOWN || this.isLive)) {
-                    this.send('start', { elapsedMs: Date.now() - this.countdownStartedAt });
+                    this.send('start', { elapsedMs: Date.now() - this.countdownStartedAt, length: this.matchLength.id });
                 }
                 break;
             case 'start':
                 if (!this.isHost && this.phase === MATCH_PHASES.WAITING) {
+                    this.matchLength = findMatchLength(payload.length);
                     this.beginCountdown(Math.max(0, payload.elapsedMs || 0));
                 }
                 break;
@@ -268,7 +298,8 @@ export class BattleMatch {
     beginCountdown(elapsedMs) {
         this.countdownStartedAt = Date.now() - elapsedMs;
         this.playStartsAt = this.countdownStartedAt + BATTLE_CONFIG.countdownMs;
-        this.matchEndsAt = this.playStartsAt + BATTLE_CONFIG.matchDurationMs;
+        // Endless never reaches its end time, so the time-up path never runs
+        this.matchEndsAt = this.isEndless ? Infinity : this.playStartsAt + this.matchLength.durationMs;
         this.setPhase(MATCH_PHASES.COUNTDOWN);
 
         // Frames stop in a hidden tab; keep the match clock (and the referee) running anyway

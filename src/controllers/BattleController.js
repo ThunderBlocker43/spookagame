@@ -4,7 +4,7 @@ import { GameSession } from '../core/GameSession.js';
 import { GAME_STATES } from '../core/GameState.js';
 import { createSeededRandom } from '../core/SeededRandom.js';
 import { BattleService } from '../core/BattleService.js';
-import { BattleMatch, MATCH_PHASES, RESULT_REASONS } from '../core/BattleMatch.js';
+import { BattleMatch, MATCH_PHASES, RESULT_REASONS, findMatchLength } from '../core/BattleMatch.js';
 import { BattlePanel } from '../ui/BattlePanel.js';
 import { BattleHud } from '../ui/BattleHud.js';
 import { OpponentView } from '../ui/OpponentView.js';
@@ -49,6 +49,7 @@ export class BattleController {
         this.seed = 0;
         this.opponentName = '';
         this.friendName = null;     // set while waiting on a private challenge
+        this.matchLengthId = BATTLE_CONFIG.defaultMatchLength; // picked in the lobby
         this.rematchCode = null;    // rematch offered by the opponent
         this.endBanner = '';
         this.lastSnapshotAt = 0;
@@ -64,6 +65,7 @@ export class BattleController {
             isMatchRunning: () => this.isMatchRunning,
             onAcceptInvite: (code) => this.acceptInvite(code),
             onDeclineInvite: (code) => this.declineInvite(code),
+            onSelectLength: (id) => this.selectMatchLength(id),
             onLayout: requestResize
         });
 
@@ -84,9 +86,19 @@ export class BattleController {
     }
 
     get rules() {
+        const length = findMatchLength(this.matchLengthId);
+        if (length.durationMs === null) {
+            const { startMs, floorMs } = BATTLE_CONFIG.endlessDropTimer;
+            return `Live 1v1 with no time limit: the first to overflow loses. You start with ${startMs / 1000} seconds per drop, shrinking over time to ${floorMs / 1000} seconds.`;
+        }
         const seconds = BATTLE_CONFIG.dropTimerMs / 1000;
-        const minutes = BATTLE_CONFIG.matchDurationMs / 60000;
+        const minutes = length.durationMs / 60000;
         return `Live 1v1, ${minutes} minutes. Overflow and you lose. If both of you survive, the highest score wins. You have ${seconds} seconds to drop each piece.`;
+    }
+
+    selectMatchLength(id) {
+        this.matchLengthId = findMatchLength(id).id;
+        this.panel.setMatchLength(this.matchLengthId, this.rules);
     }
 
     // ------------------------------------------
@@ -132,7 +144,7 @@ export class BattleController {
     }
 
     async showMenu() {
-        this.panel.showMenu({ rules: this.rules, onBack: () => this.exit() });
+        this.panel.showMenu({ rules: this.rules, matchLength: this.matchLengthId, onBack: () => this.exit() });
         this.refreshFriends();
     }
 
@@ -183,7 +195,7 @@ export class BattleController {
             const battle = await this.service.createBattle(this.profile.playerId, friendName);
             await this.teardownMatch(true);
             this.friendName = friendName;
-            this.startMatch(battle.battle_code, 'host', battle.battle_seed);
+            this.startMatch(battle.battle_code, 'host', battle.battle_seed, this.matchLengthId);
             this.showHostWaiting();
         } catch (error) {
             this.panel.setBusy(false);
@@ -258,7 +270,8 @@ export class BattleController {
     // ------------------------------------------
     // Match lifecycle
     // ------------------------------------------
-    startMatch(code, role, seed) {
+    // lengthId: host only; a guest gets the length from the host when the match starts
+    startMatch(code, role, seed, lengthId = null) {
         this.seed = seed;
         this.opponentName = '';
         this.rematchCode = null;
@@ -266,6 +279,7 @@ export class BattleController {
             code,
             role,
             myName: this.profile.username || 'Guest',
+            lengthId,
             handlers: {
                 onPhase: (phase) => this.onPhase(phase),
                 onOpponent: (info) => this.onOpponent(info),
@@ -367,10 +381,11 @@ export class BattleController {
         try {
             const battle = await this.service.createBattle(this.profile.playerId);
             const opponentName = this.opponentName;
+            const lengthId = this.match.matchLength.id; // rematch keeps the length
             this.match.offerRematch(battle.battle_code);
             await this.teardownMatch(false);
             this.friendName = opponentName;
-            this.startMatch(battle.battle_code, 'host', battle.battle_seed);
+            this.startMatch(battle.battle_code, 'host', battle.battle_seed, lengthId);
             this.showHostWaiting();
         } catch (error) {
             this.panel.setActionBusy(false);
@@ -438,7 +453,7 @@ export class BattleController {
 
         if (match.phase === MATCH_PHASES.PLAYING) {
             const drop = this.session.dropController;
-            if (Date.now() - this.turnStartedAt >= BATTLE_CONFIG.dropTimerMs) {
+            if (Date.now() - this.turnStartedAt >= this.dropTimerMs) {
                 // Out of time: drop it where it's aimed
                 drop.drop();
             }
@@ -455,7 +470,9 @@ export class BattleController {
 
         // The mirror's own merges are only a preview; the score comes from the opponent
         if (match.phase === MATCH_PHASES.COUNTDOWN || match.phase === MATCH_PHASES.PLAYING) {
-            this.panel.setClock(match.timeRemainingMs);
+            // Endless counts up (time survived); timed matches count down
+            if (match.isEndless) this.panel.setClock(match.elapsedMs, { endless: true });
+            else this.panel.setClock(match.timeRemainingMs);
         }
         this.panel.setOpponentScore(match.opponentScore);
     }
@@ -464,6 +481,11 @@ export class BattleController {
     get turnStartedAt() {
         const drop = this.session.dropController;
         return Math.max(drop.lastDropTime + DROP_CONFIG.dropCooldownMs, this.match.playStartsAt);
+    }
+
+    // Time allowed for the piece being held (shrinks over time in Endless)
+    get dropTimerMs() {
+        return this.match.dropTimerMsFor(this.turnStartedAt);
     }
 
     render(p, aimX) {
@@ -476,9 +498,10 @@ export class BattleController {
 
         if (!match) return;
         if (match.phase === MATCH_PHASES.PLAYING) {
-            const remaining = BATTLE_CONFIG.dropTimerMs - (Date.now() - this.turnStartedAt);
+            const allowed = this.dropTimerMs;
+            const remaining = allowed - (Date.now() - this.turnStartedAt);
             this.hud.renderDropTimer(p, session.dropController.aimX, session.dropController.currentTier,
-                Math.min(BATTLE_CONFIG.dropTimerMs, remaining), BATTLE_CONFIG.dropTimerMs);
+                Math.min(allowed, remaining), allowed);
         } else if (match.phase === MATCH_PHASES.COUNTDOWN) {
             this.hud.renderCountdown(p, match.countdownRemainingMs);
         } else if (match.phase === MATCH_PHASES.ENDING) {

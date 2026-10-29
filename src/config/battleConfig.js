@@ -7,11 +7,30 @@
 export const BATTLE_CONFIG = {
     // Time a player has to drop the piece they're holding. Starts once the
     // drop cooldown is over; when it hits zero the piece drops where it's aimed.
+    // Used by the timed lengths; Endless uses endlessDropTimer below.
     dropTimerMs: 4000,
 
-    // Match length. Overflowing ends the match early (that player loses);
-    // otherwise the highest score when the clock runs out wins.
-    matchDurationMs: 3 * 60 * 1000,
+    // Match lengths the host can pick in the lobby. Overflowing always ends the
+    // match early (that player loses); in a timed match the highest score when
+    // the clock runs out wins. durationMs null = Endless: no clock, only an
+    // overflow (or a forfeit) ends it.
+    matchLengths: [
+        { id: '3min', label: '3 min', durationMs: 3 * 60 * 1000 },
+        { id: '5min', label: '5 min', durationMs: 5 * 60 * 1000 },
+        { id: 'endless', label: 'Endless', durationMs: null }
+    ],
+    defaultMatchLength: '3min',
+
+    // Endless pacing: the drop timer starts generous and halves every
+    // halfLifeMs of match time until it bottoms out at floorMs ("terminal
+    // velocity"), then stays there. Each piece gets the value for the moment
+    // it became droppable, so a timer never shrinks while you hold it.
+    // With these values the floor is reached after ~2.5 minutes.
+    endlessDropTimer: {
+        startMs: 7000,
+        halfLifeMs: 120 * 1000,
+        floorMs: 3000
+    },
 
     // "3, 2, 1, GO" before the boards go live
     countdownMs: 3000,

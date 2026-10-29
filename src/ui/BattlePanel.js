@@ -1,4 +1,5 @@
 import { DESIGN_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig.js';
+import { BATTLE_CONFIG } from '../config/battleConfig.js';
 import { isolateFromGame } from './domUtils.js';
 
 // ==========================================
@@ -51,6 +52,8 @@ export class BattlePanel {
                 <p class="lb-dialog-text bt-text"></p>
 
                 <div class="bt-view bt-view--menu">
+                    <h3 class="bt-subtitle">Match length</h3>
+                    <div class="lb-tabs bt-lengths" role="tablist" aria-label="Match length"></div>
                     <button class="bt-primary bt-create" type="button">Create invite link</button>
                     <h3 class="bt-subtitle">Challenge a friend</h3>
                     <ol class="lb-list bt-friends"></ol>
@@ -91,7 +94,10 @@ export class BattlePanel {
         this.card.setAttribute('aria-label', 'Opponent');
         this.card.innerHTML = `
             <div class="bt-card-info">
-                <div class="bt-clock" aria-label="Time left">3:00</div>
+                <div class="bt-clock-row">
+                    <div class="bt-clock" aria-label="Time left">3:00</div>
+                    <span class="bt-clock-label"></span>
+                </div>
                 <div class="bt-opp">
                     <span class="bt-opp-name"></span>
                     <span class="bt-opp-score">0</span>
@@ -139,7 +145,9 @@ export class BattlePanel {
             error: q(this.dialog, '.bt-error'),
             back: q(this.dialog, '.bt-back'),
             action: q(this.dialog, '.bt-action'),
+            lengths: q(this.dialog, '.bt-lengths'),
             clock: q(this.card, '.bt-clock'),
+            clockLabel: q(this.card, '.bt-clock-label'),
             oppName: q(this.card, '.bt-opp-name'),
             oppScore: q(this.card, '.bt-opp-score'),
             status: q(this.card, '.bt-status'),
@@ -155,6 +163,17 @@ export class BattlePanel {
         this.actionHandler = null;
         this.el.back.addEventListener('click', () => this.backHandler?.());
         this.el.action.addEventListener('click', () => this.actionHandler?.());
+
+        this.el.lengths.append(...BATTLE_CONFIG.matchLengths.map((length) => {
+            const tab = document.createElement('button');
+            tab.className = 'lb-tab';
+            tab.type = 'button';
+            tab.setAttribute('role', 'tab');
+            tab.dataset.length = length.id;
+            tab.textContent = length.label;
+            tab.addEventListener('click', () => this.handlers.onSelectLength(length.id));
+            return tab;
+        }));
 
         this.el.create.addEventListener('click', () => this.handlers.onCreateLink());
         this.el.join.addEventListener('click', () => this.handlers.onJoinLeaderboard());
@@ -216,14 +235,23 @@ export class BattlePanel {
         });
     }
 
-    showMenu({ rules, onBack }) {
+    showMenu({ rules, matchLength, onBack }) {
         this.openDialog('menu', {
             title: 'Drop Battle',
             text: rules,
             back: { label: 'Back to Classic', onClick: onBack },
             wide: true
         });
+        this.setMatchLength(matchLength, rules);
         this.setBusy(false);
+    }
+
+    // Highlight the picked length; the rules text describes it
+    setMatchLength(lengthId, rules) {
+        this.el.lengths.querySelectorAll('.lb-tab').forEach((tab) => {
+            tab.setAttribute('aria-selected', String(tab.dataset.length === lengthId));
+        });
+        this.el.text.textContent = rules;
     }
 
     // entries: rows from get_friends_leaderboard; message replaces the list
@@ -334,9 +362,12 @@ export class BattlePanel {
         this.el.oppScore.textContent = score;
     }
 
-    setClock(ms) {
+    // Timed: time left (turns orange in the last 30 s). Endless: time survived.
+    setClock(ms, { endless = false } = {}) {
         this.el.clock.textContent = formatClock(ms);
-        this.el.clock.classList.toggle('bt-clock--low', ms > 0 && ms <= 30000);
+        this.el.clock.setAttribute('aria-label', endless ? 'Time played' : 'Time left');
+        this.el.clockLabel.textContent = endless ? 'Endless' : '';
+        this.el.clock.classList.toggle('bt-clock--low', !endless && ms > 0 && ms <= 30000);
     }
 
     setStatus(text) {
