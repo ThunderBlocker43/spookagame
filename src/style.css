@@ -21,3 +21,257 @@ html, body {
 canvas {
   display: block;
 }
+/* ==========================================
+   LEADERBOARD (HTML overlay, outside the canvas)
+   ========================================== */
+.lb {
+  --lb-width: 230px;
+  font-size: 14px;
+}
+
+.lb-panel {
+  box-sizing: border-box;
+  width: var(--lb-width);
+  padding: 14px;
+  background-color: #221636;
+  border: 1.5px solid #4a3366;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.lb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lb-title {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ff7518;
+}
+
+.lb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lb-entry {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background-color: #1c142b;
+}
+
+.lb-entry--me {
+  outline: 1.5px solid #ffaa33;
+}
+
+.lb-rank {
+  color: #a795be;
+}
+
+.lb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-score {
+  font-weight: bold;
+  color: #ffaa33;
+}
+
+.lb-status,
+.lb-player {
+  margin: 0;
+  font-size: 12px;
+  color: #a795be;
+}
+
+.lb-status:empty {
+  display: none;
+}
+
+.lb-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.lb button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.lb-join,
+.lb-save {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background-color: #ff6200;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.lb-close,
+.lb-toggle,
+.lb-backdrop {
+  display: none;
+}
+
+/* Desktop: panel fixed beside the canvas, canvas itself is untouched */
+.lb--side .lb-panel {
+  position: fixed;
+  left: var(--lb-left);
+  top: var(--lb-top);
+  max-height: var(--lb-max-height);
+}
+
+/* Mobile: toggle button + slide-in drawer over the game */
+.lb--drawer .lb-toggle {
+  display: block;
+  position: fixed;
+  right: 8px;
+  bottom: var(--lb-toggle-bottom, 8px);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid #4a3366;
+  border-radius: 50%;
+  background-color: rgba(34, 22, 54, 0.9);
+  font-size: 20px;
+  z-index: 2;
+}
+
+.lb--drawer .lb-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(80vw, 280px);
+  border-radius: 0 12px 12px 0;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  z-index: 4;
+}
+
+.lb--drawer .lb-close {
+  display: block;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: #a795be;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.lb--drawer.lb--open .lb-panel {
+  transform: translateX(0);
+}
+
+.lb--drawer.lb--open .lb-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(8, 4, 15, 0.6);
+  z-index: 3;
+}
+
+/* Username prompt */
+.lb-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(8, 4, 15, 0.6);
+  z-index: 5;
+}
+
+.lb-dialog-backdrop[hidden] {
+  display: none;
+}
+
+.lb-dialog {
+  box-sizing: border-box;
+  width: min(90vw, 320px);
+  padding: 20px;
+  background-color: #1d122d;
+  border: 2.5px solid #ff7518;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.lb-dialog-text,
+.lb-error {
+  margin: 0;
+  color: #cec2df;
+}
+
+.lb-error {
+  color: #ff6600;
+  font-size: 12px;
+}
+
+.lb-error:empty {
+  display: none;
+}
+
+.lb-name-row {
+  display: flex;
+  gap: 8px;
+}
+
+.lb-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1.5px solid #4a3366;
+  border-radius: 8px;
+  background-color: #130d20;
+  color: #f5efff;
+  font: inherit;
+  font-size: 16px; /* prevents iOS zoom on focus */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.lb-dialog button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.lb-reroll,
+.lb-skip {
+  padding: 6px 10px;
+  border: 1.5px solid #4a3366;
+  border-radius: 8px;
+  background: none;
+  color: #cec2df;
+}
+
+.lb-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lb-save:disabled {
+  opacity: 0.6;
+}
