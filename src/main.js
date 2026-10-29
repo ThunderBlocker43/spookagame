@@ -1,14 +1,13 @@
 import p5 from 'p5';
 import {DESIGN_WIDTH, DESIGN_HEIGHT, FRUIT_TIERS, THEME} from './config/gameConfig.js';
-import { PhysicsWorld } from './physics/PhysicsWorld.js';
+import { MODES, MODE_LIST } from './config/modesConfig.js';
 import { SvgHitboxParser } from './physics/SvgHitboxParser.js';
-import { Container } from './entities/Container.js';
-import { DropController } from './controllers/DropController.js';
-import { MergeController } from './controllers/MergeController.js';
-import { ScoreManager } from './core/ScoreManager.js';
-import { GameState, GAME_STATES } from './core/GameState.js';
+import { GameSession } from './core/GameSession.js';
+import { GAME_STATES } from './core/GameState.js';
 import { UIManager } from './ui/UIManager.js';
+import { ModeNav } from './ui/ModeNav.js';
 import { LeaderboardController } from './controllers/LeaderboardController.js';
+import { BattleController } from './controllers/BattleController.js';
 
 const sketch = (p) => {
     const appElement = document.getElementById('app');
@@ -17,17 +16,11 @@ const sketch = (p) => {
     let scale = 1;
 
     // Game Core State & Entities
-    let physicsWorld;
-    let container;
-    let scoreManager;
-    let dropController;
-    let mergeController;
-    let gameState;
+    let classic;            // the Classic board (GameSession)
     let uiManager;
     let leaderboardController;
-
-    const activeFruits = [];
-    const particles = [];
+    let battleController;
+    let modeNav;
 
     // ==========================================
     // 1. SCALING & VIEWPORT CALCULATION
@@ -37,8 +30,13 @@ const sketch = (p) => {
             ? appElement.getBoundingClientRect()
             : { width: window.innerWidth, height: window.innerHeight };
 
-        const containerWidth = rect.width || window.innerWidth;
-        const containerHeight = rect.height || window.innerHeight;
+        // Drop Battle pads #app to make room for the opponent's board (0 in Classic)
+        const style = appElement ? getComputedStyle(appElement) : null;
+        const padX = style ? parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) : 0;
+        const padY = style ? parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) : 0;
+
+        const containerWidth = (rect.width || window.innerWidth) - padX;
+        const containerHeight = (rect.height || window.innerHeight) - padY;
 
         const scaleFactor = Math.min(
             containerWidth / DESIGN_WIDTH,
@@ -108,26 +106,46 @@ const sketch = (p) => {
         }
 
         // Initialize game architecture
-        scoreManager = new ScoreManager();
-        container = new Container();
+        classic = new GameSession();
         uiManager = new UIManager();
-        leaderboardController = new LeaderboardController(scoreManager, canvas.elt);
+        leaderboardController = new LeaderboardController(classic.scoreManager, canvas.elt);
 
-        // Setup physics with merge collision listener
-        physicsWorld = new PhysicsWorld((fruitA, fruitB, contact) => {
-            mergeController.onFruitCollision(fruitA, fruitB, contact);
+        modeNav = new ModeNav(canvas.elt, MODE_LIST, { onSelect: (mode) => selectMode(mode) });
+        modeNav.setActive(MODES.CLASSIC);
+
+        battleController = new BattleController({
+            leaderboard: leaderboardController,
+            uiManager,
+            appElement,
+            canvasElement: canvas.elt,
+            onEnter: () => modeNav.setActive(MODES.BATTLE),
+            onExit: () => modeNav.setActive(MODES.CLASSIC),
+            requestResize: () => p.windowResized()
         });
+        leaderboardController.onChallengeFriend = (name) => battleController.challengeFriend(name);
+        leaderboardController.onPlayerChanged = () => battleController.onPlayerChanged();
 
-        mergeController = new MergeController(physicsWorld, scoreManager, particles, activeFruits);
+        // Opened from a Drop Battle invite link?
+        battleController.openFromUrl();
+    };
 
-        dropController = new DropController(physicsWorld, (newFruit) => {
-            activeFruits.push(newFruit);
-        });
-
-        gameState = new GameState(scoreManager, physicsWorld, dropController);
+    // ==========================================
+    // 4. GAME MODES
+    // ==========================================
+    // Classic stays paused (not reset) while Drop Battle is open.
+    const selectMode = (mode) => {
+        if (mode === MODES.BATTLE) {
+            modeNav.setActive(MODES.BATTLE);
+            battleController.open();
+        } else if (battleController.isOpen) {
+            battleController.exit();
+        }
     };
 
     p.draw = () => {
+        // setup() is async (sprite loading); draw can run before it finishes
+        if (!classic) return;
+
         // Delta time for physics and animations
         const dt = Math.min(p.deltaTime / 1000, 1 / 30);
 
@@ -138,51 +156,23 @@ const sketch = (p) => {
         // Spooky Halloween background
         p.background(THEME.canvasBackground);
 
-        // Physics & Game Logic Step
-        if (gameState.state === GAME_STATES.PLAYING) {
-            physicsWorld.update(p.deltaTime);
-            mergeController.processPendingMerges();
-
-            for (let i = 0; i < activeFruits.length; i++) {
-                activeFruits[i].update(dt);
-            }
-
-            gameState.checkGameOverConditions(activeFruits, dt);
-
-            if (gameState.state === GAME_STATES.GAMEOVER) {
-                leaderboardController.onGameOver();
-            }
+        // Drop Battle match: the canvas shows the player's own battle board
+        if (battleController.isMatchVisible) {
+            battleController.update(p.deltaTime, dt);
+            battleController.render(p, p.vMouseX);
+            return;
         }
 
-        // Update Particle system
-        for (let i = particles.length - 1; i >= 0; i--) {
-            if (!particles[i].update()) {
-                particles.splice(i, 1);
-            }
+        // Physics & Game Logic Step (paused behind the Drop Battle lobby)
+        if (!battleController.isOpen && classic.update(p.deltaTime, dt)) {
+            leaderboardController.onGameOver();
         }
 
-        // --- Render Pass ---
-        // 1. Container Walls & Interior
-        container.render(p, gameState.dangerRatio);
+        // Render Pass: container, fruits, particles, aim & preview
+        classic.render(p, p.vMouseX);
 
-        // 2. Active Fruits inside Container
-        for (let i = 0; i < activeFruits.length; i++) {
-            activeFruits[i].render(p, gameState.showHitboxDebug);
-        }
-
-        // 3. Merge Effect Particles
-        for (let i = 0; i < particles.length; i++) {
-            particles[i].render(p);
-        }
-
-        // 4. Drop Aim & Preview
-        if (gameState.state === GAME_STATES.PLAYING) {
-            dropController.updateAim(p.vMouseX);
-            dropController.render(p, gameState.showHitboxDebug);
-        }
-
-        // 5. UI Layer (Score, Next fruit preview, Game Over overlay)
-        uiManager.render(p, gameState, scoreManager, dropController);
+        // UI Layer (Score, Next fruit preview, Game Over overlay)
+        uiManager.render(p, classic.gameState, classic.scoreManager, classic.dropController);
     };
 
     p.windowResized = () => {
@@ -192,7 +182,7 @@ const sketch = (p) => {
     };
 
     // ==========================================
-    // 4. INPUT HANDLING
+    // 5. INPUT HANDLING
     // ==========================================
     p.mousePressed = () => {
         handleUserAction();
@@ -204,17 +194,28 @@ const sketch = (p) => {
     };
 
     p.keyPressed = () => {
+        if (!classic || battleController.isOpen) return;
+
         if (p.key === 'r' || p.key === 'R') {
-            gameState.restart(activeFruits, particles);
+            classic.restart();
         } else if (p.key === 'd' || p.key === 'D' || p.key === 'h' || p.key === 'H') {
-            gameState.toggleHitboxDebug();
+            classic.gameState.toggleHitboxDebug();
         }
     };
 
     const handleUserAction = () => {
+        if (!classic) return;
+
+        if (battleController.isOpen) {
+            battleController.onUserAction(p.vMouseX);
+            return;
+        }
+
+        const { gameState, dropController } = classic;
+
         // If clicking on the game over screen, restart
         if (gameState.state === GAME_STATES.GAMEOVER) {
-            gameState.restart(activeFruits, particles);
+            classic.restart();
             return;
         }
 

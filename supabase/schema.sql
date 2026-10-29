@@ -82,6 +82,33 @@ create table if not exists public.schema_migrations (
     applied_at timestamptz not null default now()
 );
 
+-- ------------------------------------------
+-- Drop Battle: matches (invite links and friend challenges)
+-- The live game itself runs over Realtime broadcast; this table only decides
+-- who may join a match and hands both players the same piece seed.
+-- ------------------------------------------
+create table if not exists public.battles (
+    code       text primary key,
+    host_id    uuid not null,
+    guest_id   uuid,
+    invited_id uuid references public.leaderboard (player_id) on delete cascade,
+    seed       integer not null,
+    status     text not null default 'open',
+    created_at timestamptz not null default now(),
+    expires_at timestamptz not null default now() + interval '10 minutes',
+    constraint battles_status check (status in ('open', 'full', 'finished'))
+);
+
+create index if not exists battles_host_idx on public.battles (host_id, created_at desc);
+create index if not exists battles_invited_idx on public.battles (invited_id) where status = 'open';
+create index if not exists battles_created_idx on public.battles (created_at);
+
+-- When each named player last had the game open (friends' online dot)
+create table if not exists public.player_presence (
+    player_id    uuid primary key references public.leaderboard (player_id) on delete cascade,
+    last_seen_at timestamptz not null default now()
+);
+
 -- Lock the tables: RLS on with no policies, and no direct grants
 alter table public.leaderboard enable row level security;
 alter table public.seasons enable row level security;
@@ -89,8 +116,10 @@ alter table public.scores enable row level security;
 alter table public.highscore_history enable row level security;
 alter table public.friends enable row level security;
 alter table public.schema_migrations enable row level security;
+alter table public.battles enable row level security;
+alter table public.player_presence enable row level security;
 revoke all on public.leaderboard, public.seasons, public.scores, public.highscore_history,
-    public.friends, public.schema_migrations from anon, authenticated;
+    public.friends, public.schema_migrations, public.battles, public.player_presence from anon, authenticated;
 
 -- ------------------------------------------
 -- Top N public scores, all time (no player ids exposed)
@@ -150,13 +179,18 @@ as $$
 $$;
 
 -- ------------------------------------------
--- The player plus everyone on their friends list, by all-time best
+-- The player plus everyone on their friends list, by all-time best.
+-- online = had the game open in the last 30 s (see battle_heartbeat).
 -- ------------------------------------------
+drop function if exists public.get_friends_leaderboard(uuid);
+
 create or replace function public.get_friends_leaderboard(p_player_id uuid)
-returns table (username text, score integer, is_me boolean)
+returns table (username text, score integer, is_me boolean, online boolean)
 language sql stable security definer set search_path = public
 as $$
-    select l.username, l.score, l.player_id = p_player_id
+    select l.username, l.score, l.player_id = p_player_id,
+           exists (select 1 from player_presence pp
+                   where pp.player_id = l.player_id and pp.last_seen_at > now() - interval '30 seconds')
     from leaderboard l
     where l.player_id = p_player_id
        or l.player_id in (select f.friend_id from friends f where f.player_id = p_player_id)
@@ -309,6 +343,150 @@ as $$
       and f.friend_id = (select l.player_id from leaderboard l where lower(l.username) = lower(btrim(p_friend_username)));
 $$;
 
+-- ------------------------------------------
+-- Drop Battle: open a match. With p_friend_username it is a private challenge
+-- only that friend can accept; without, anyone with the link can join.
+-- ------------------------------------------
+create or replace function public.create_battle(p_player_id uuid, p_friend_username text default null)
+returns table (battle_code text, battle_seed integer, battle_expires_at timestamptz)
+language plpgsql security definer set search_path = public
+as $$
+declare
+    v_friend_id uuid;
+    v_code text;
+    v_seed integer;
+    v_expires timestamptz := now() + interval '10 minutes';
+begin
+    if p_player_id is null then
+        raise exception 'invalid_player';
+    end if;
+
+    -- Rate limits: one new match per player every 3 s, max 120 per minute overall
+    if exists (select 1 from battles b where b.host_id = p_player_id and b.created_at > now() - interval '3 seconds') then
+        raise exception 'rate_limited';
+    end if;
+    if (select count(*) from battles b where b.created_at > now() - interval '1 minute') >= 120 then
+        raise exception 'rate_limited';
+    end if;
+
+    if p_friend_username is not null then
+        select l.player_id into v_friend_id
+        from friends f
+        join leaderboard l on l.player_id = f.friend_id
+        where f.player_id = p_player_id and lower(l.username) = lower(btrim(p_friend_username));
+        if not found then
+            raise exception 'friend_not_found';
+        end if;
+    end if;
+
+    -- One open lobby per host; day-old matches are cleaned up as new ones are made
+    update battles b set status = 'finished' where b.host_id = p_player_id and b.status = 'open';
+    delete from battles b where b.created_at < now() - interval '1 day';
+
+    -- 64 random bits: the code doubles as the Realtime channel name, so it must be unguessable
+    v_code := substr(replace(gen_random_uuid()::text, '-', ''), 1, 16);
+    v_seed := floor(random() * 2147483647)::integer;
+
+    insert into battles (code, host_id, invited_id, seed, expires_at)
+    values (v_code, p_player_id, v_friend_id, v_seed, v_expires);
+
+    return query select v_code, v_seed, v_expires;
+end;
+$$;
+
+-- ------------------------------------------
+-- Drop Battle: take the guest seat (or rejoin your own seat).
+-- Errors: battle_not_found, battle_over, battle_expired, battle_full, battle_private
+-- ------------------------------------------
+create or replace function public.join_battle(p_code text, p_player_id uuid)
+returns table (battle_role text, battle_seed integer, host_name text)
+language plpgsql security definer set search_path = public
+as $$
+declare
+    v_battle battles%rowtype;
+    v_role text;
+begin
+    if p_player_id is null then
+        raise exception 'invalid_player';
+    end if;
+
+    select * into v_battle from battles b where b.code = lower(btrim(p_code)) for update;
+    if not found then
+        raise exception 'battle_not_found';
+    end if;
+    if v_battle.status = 'finished' then
+        raise exception 'battle_over';
+    end if;
+    if v_battle.created_at < now() - interval '1 hour'
+        or (v_battle.status = 'open' and v_battle.expires_at < now()) then
+        raise exception 'battle_expired';
+    end if;
+
+    if v_battle.host_id = p_player_id then
+        v_role := 'host';
+    elsif v_battle.guest_id = p_player_id then
+        v_role := 'guest';
+    elsif v_battle.guest_id is not null then
+        raise exception 'battle_full';
+    elsif v_battle.invited_id is not null and v_battle.invited_id <> p_player_id then
+        raise exception 'battle_private';
+    else
+        update battles b set guest_id = p_player_id, status = 'full' where b.code = v_battle.code;
+        v_role := 'guest';
+    end if;
+
+    return query
+    select v_role, v_battle.seed,
+           coalesce((select l.username from leaderboard l where l.player_id = v_battle.host_id), 'Guest');
+end;
+$$;
+
+-- ------------------------------------------
+-- Drop Battle: end a match (host, guest or invited friend declining), or with
+-- p_release_seat give up the guest seat before the match started so someone
+-- else can use the link.
+-- ------------------------------------------
+create or replace function public.close_battle(p_code text, p_player_id uuid, p_release_seat boolean default false)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+    if p_release_seat then
+        update battles b set guest_id = null, status = 'open'
+        where b.code = lower(btrim(p_code)) and b.guest_id = p_player_id and b.status = 'full';
+    else
+        update battles b set status = 'finished'
+        where b.code = lower(btrim(p_code)) and p_player_id in (b.host_id, b.guest_id, b.invited_id);
+    end if;
+end;
+$$;
+
+-- ------------------------------------------
+-- Drop Battle: called every few seconds by named players with the game open.
+-- Marks them online for their friends and returns challenges waiting for them.
+-- ------------------------------------------
+create or replace function public.battle_heartbeat(p_player_id uuid)
+returns table (battle_code text, host_name text, battle_expires_at timestamptz)
+language plpgsql security definer set search_path = public
+as $$
+begin
+    if not exists (select 1 from leaderboard l where l.player_id = p_player_id) then
+        return;
+    end if;
+
+    insert into player_presence as pp (player_id, last_seen_at) values (p_player_id, now())
+    on conflict (player_id) do update set last_seen_at = now();
+
+    return query
+    select b.code, coalesce(l.username, 'Guest'), b.expires_at
+    from battles b
+    left join leaderboard l on l.player_id = b.host_id
+    where b.invited_id = p_player_id and b.status = 'open' and b.expires_at > now()
+    order by b.created_at desc
+    limit 5;
+end;
+$$;
+
 revoke execute on function public.get_leaderboard(integer) from public;
 revoke execute on function public.get_weekly_leaderboard(integer) from public;
 revoke execute on function public.get_season_leaderboard(text, integer) from public;
@@ -318,6 +496,10 @@ revoke execute on function public.get_history(uuid) from public;
 revoke execute on function public.submit_score(uuid, text, integer, text, integer) from public;
 revoke execute on function public.add_friend(uuid, text) from public;
 revoke execute on function public.remove_friend(uuid, text) from public;
+revoke execute on function public.create_battle(uuid, text) from public;
+revoke execute on function public.join_battle(text, uuid) from public;
+revoke execute on function public.close_battle(text, uuid, boolean) from public;
+revoke execute on function public.battle_heartbeat(uuid) from public;
 grant execute on function public.get_leaderboard(integer) to anon, authenticated;
 grant execute on function public.get_weekly_leaderboard(integer) to anon, authenticated;
 grant execute on function public.get_season_leaderboard(text, integer) to anon, authenticated;
@@ -327,6 +509,10 @@ grant execute on function public.get_history(uuid) to anon, authenticated;
 grant execute on function public.submit_score(uuid, text, integer, text, integer) to anon, authenticated;
 grant execute on function public.add_friend(uuid, text) to anon, authenticated;
 grant execute on function public.remove_friend(uuid, text) to anon, authenticated;
+grant execute on function public.create_battle(uuid, text) to anon, authenticated;
+grant execute on function public.join_battle(text, uuid) to anon, authenticated;
+grant execute on function public.close_battle(text, uuid, boolean) to anon, authenticated;
+grant execute on function public.battle_heartbeat(uuid) to anon, authenticated;
 
 -- ------------------------------------------
 -- DATA MIGRATION 002: upgrade pre-season leaderboard rows (runs once)

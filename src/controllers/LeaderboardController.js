@@ -41,6 +41,10 @@ export class LeaderboardController {
         // Best game score played before the player picked a name (sent when they join)
         this.unsubmittedBest = 0;
 
+        // Drop Battle hooks, set by main.js: Friends tab ⚔️ button, name joined/changed
+        this.onChallengeFriend = null;
+        this.onPlayerChanged = null;
+
         this.panel = new LeaderboardPanel(canvasElement, {
             boards: BOARD_TABS,
             showSeason: LEADERBOARD_CONFIG.showSeasonalBoard,
@@ -50,6 +54,7 @@ export class LeaderboardController {
             onSubmitName: (name) => this.claimUsername(name),
             onAddFriend: (name) => this.addFriend(name),
             onRemoveFriend: (name) => this.removeFriend(name),
+            onChallengeFriend: (name) => this.onChallengeFriend?.(name),
             suggestName: () => PlayerProfile.generateUsername()
         });
 
@@ -237,5 +242,6 @@ export class LeaderboardController {
         const canJoin = this.service.isConfigured && !this.profile.hasUsername;
         this.panel.setPlayer(this.profile.username, canJoin);
         this.panel.showBoard(this.activeBoard, this.profile.hasUsername);
+        this.onPlayerChanged?.();
     }
 }

@@ -4,11 +4,12 @@ import { GAME_STATES } from '../core/GameState.js';
 export class UIManager {
     constructor() {}
 
-    render(p, gameState, scoreManager, dropController) {
+    // Drop Battle passes { battle: true }: no BEST score and no Game Over/restart modal
+    render(p, gameState, scoreManager, dropController, { battle = false } = {}) {
         p.push();
 
         // 1. Top HUD
-        this.renderHeader(p, scoreManager, dropController, gameState.showHitboxDebug);
+        this.renderHeader(p, scoreManager, dropController, gameState.showHitboxDebug, !battle);
 
         // 2. Danger Warning Overlay
         if (gameState.dangerRatio > 0 && gameState.state === GAME_STATES.PLAYING) {
@@ -19,14 +20,14 @@ export class UIManager {
         this.renderEvolutionBar(p);
 
         // 4. Game Over Screen
-        if (gameState.state === GAME_STATES.GAMEOVER) {
+        if (gameState.state === GAME_STATES.GAMEOVER && !battle) {
             this.renderGameOver(p, scoreManager);
         }
 
         p.pop();
     }
 
-    renderHeader(p, scoreManager, dropController, isDebug) {
+    renderHeader(p, scoreManager, dropController, isDebug, showBest = true) {
         p.push();
 
         // Score Card (Top Left)
@@ -47,10 +48,12 @@ export class UIManager {
         p.text(scoreManager.currentScore, CONTAINER_CONFIG.x + 10, 36);
 
         // High Score indicator
-        p.fill(THEME.cardBestScoreText);
-        p.textSize(9);
         p.textStyle(p.NORMAL);
-        p.text(`BEST: ${scoreManager.highScore}`, CONTAINER_CONFIG.x + 65, 20);
+        if (showBest) {
+            p.fill(THEME.cardBestScoreText);
+            p.textSize(9);
+            p.text(`BEST: ${scoreManager.highScore}`, CONTAINER_CONFIG.x + 65, 20);
+        }
 
         // Next Fruit Preview Card (Top Right)
         const nextCardX = CONTAINER_CONFIG.x + CONTAINER_CONFIG.width - 65;
