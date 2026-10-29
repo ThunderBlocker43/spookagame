@@ -1,4 +1,4 @@
-import { FRUIT_TIERS, DROP_CONFIG, DESIGN_WIDTH, DESIGN_HEIGHT, THEME } from '../config/gameConfig.js';
+import { FRUIT_TIERS, DROP_CONFIG, DESIGN_WIDTH, DESIGN_HEIGHT, CANVAS_HEIGHT, THEME } from '../config/gameConfig.js';
 
 // ==========================================
 // BATTLE HUD (in-canvas Drop Battle overlays on the player's own board)
@@ -40,7 +40,7 @@ export class BattleHud {
         p.push();
         p.noStroke();
         p.fill(0, 0, 0, dim);
-        p.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+        p.rect(0, 0, DESIGN_WIDTH, CANVAS_HEIGHT);
         p.fill(THEME.modalTitle);
         p.textSize(size);
         p.textStyle(p.BOLD);

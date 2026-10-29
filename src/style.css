@@ -16,6 +16,9 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
+
+  /* Touch drags aim the held piece; never pan/zoom (that would cancel the touch) */
+  touch-action: none;
 }
 
 canvas {

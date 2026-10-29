@@ -1,4 +1,4 @@
-import { DESIGN_WIDTH, DESIGN_HEIGHT } from '../config/gameConfig.js';
+import { DESIGN_WIDTH, CANVAS_HEIGHT } from '../config/gameConfig.js';
 import { isolateFromGame } from './domUtils.js';
 
 // ==========================================
@@ -11,7 +11,7 @@ import { isolateFromGame } from './domUtils.js';
 //   picture-in-picture board; the player's canvas gets everything below it.
 // Nothing ever overlaps the player's own canvas.
 
-const ASPECT = DESIGN_WIDTH / DESIGN_HEIGHT;
+const ASPECT = DESIGN_WIDTH / CANVAS_HEIGHT;
 const OPPONENT_SCALE = 0.7;
 const EDGE = 12;
 const GAP = 16;

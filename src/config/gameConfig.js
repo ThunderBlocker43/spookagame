@@ -5,7 +5,11 @@
 // are defined here in single data-driven structures.
 
 export const DESIGN_WIDTH = 360;
-export const DESIGN_HEIGHT = 640;
+export const DESIGN_HEIGHT = 640;         // Board area (header + container); game logic uses this
+
+// Band below the board for the tier evolution guide; the canvas covers both
+export const GUIDE_HEIGHT = 46;
+export const CANVAS_HEIGHT = DESIGN_HEIGHT + GUIDE_HEIGHT;
 
 export const PHYSICS_CONFIG = {
     gravity: 1.4,             // World gravity scale (Y axis)

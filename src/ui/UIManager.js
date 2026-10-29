@@ -1,4 +1,4 @@
-import { FRUIT_TIERS, CONTAINER_CONFIG, DESIGN_WIDTH, DESIGN_HEIGHT, THEME } from '../config/gameConfig.js';
+import { FRUIT_TIERS, CONTAINER_CONFIG, DESIGN_WIDTH, DESIGN_HEIGHT, GUIDE_HEIGHT, CANVAS_HEIGHT, THEME } from '../config/gameConfig.js';
 import { GAME_STATES } from '../core/GameState.js';
 
 export class UIManager {
@@ -70,14 +70,7 @@ export class UIManager {
 
         // Draw preview of next fruit
         const nextConfig = FRUIT_TIERS[dropController.nextTier] || FRUIT_TIERS[0];
-        const previewRadius = Math.min(14, nextConfig.radius * 0.45);
-        p.push();
-        p.translate(nextCardX + 32, 44);
-        p.fill(nextConfig.color);
-        p.noStroke();
-        p.ellipseMode(p.RADIUS);
-        p.ellipse(0, 0, previewRadius, previewRadius);
-        p.pop();
+        this.renderTierIcon(p, nextConfig, nextCardX + 32, 46, 30);
 
         // Debug Hitbox Indicator (Top Center)
         p.noStroke();
@@ -103,24 +96,41 @@ export class UIManager {
         p.pop();
     }
 
+    // Tier sprite (the same image the playfield uses), coloured circle as fallback
+    renderTierIcon(p, tierConfig, x, y, size) {
+        p.push();
+        if (tierConfig.spriteImage) {
+            p.imageMode(p.CENTER);
+            p.image(tierConfig.spriteImage, x, y, size, size);
+        } else {
+            p.noStroke();
+            p.fill(tierConfig.color);
+            p.ellipseMode(p.CENTER);
+            p.ellipse(x, y, size * 0.8, size * 0.8);
+        }
+        p.pop();
+    }
+
+    // Evolution guide in its own band under the container: every tier at the same,
+    // readable size in equal slots, smallest to largest, on a dark panel so the
+    // sprites' outlines stand out
     renderEvolutionBar(p) {
         p.push();
-        const barY = DESIGN_HEIGHT - 18;
+        const margin = 6;
+        const panelY = DESIGN_HEIGHT + 2;
+        const panelH = GUIDE_HEIGHT - 6;
         const totalFruits = FRUIT_TIERS.length;
-        const spacing = (DESIGN_WIDTH - 40) / totalFruits;
+        const slotW = (DESIGN_WIDTH - margin * 2) / totalFruits;
+        const iconSize = Math.min(slotW - 2, panelH - 8);
+        const centerY = panelY + panelH / 2;
 
         p.stroke(THEME.evolutionBarBorder);
         p.strokeWeight(1);
         p.fill(THEME.evolutionBarBackground);
-        p.rect(15, barY - 8, DESIGN_WIDTH - 30, 16, 8);
+        p.rect(margin, panelY, DESIGN_WIDTH - margin * 2, panelH, 10);
 
-        p.noStroke();
         for (let i = 0; i < totalFruits; i++) {
-            const fruit = FRUIT_TIERS[i];
-            const x = 25 + i * spacing;
-            p.fill(fruit.color);
-            p.ellipseMode(p.RADIUS);
-            p.ellipse(x, barY, 4 + i * 0.4, 4 + i * 0.4);
+            this.renderTierIcon(p, FRUIT_TIERS[i], margin + slotW * (i + 0.5), centerY, iconSize);
         }
         p.pop();
     }
@@ -131,7 +141,7 @@ export class UIManager {
         // Dim dark background overlay
         p.fill(0, 0, 0, 190);
         p.noStroke();
-        p.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+        p.rect(0, 0, DESIGN_WIDTH, CANVAS_HEIGHT);
 
         // Modal Box
         const modalW = 260;

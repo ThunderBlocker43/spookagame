@@ -1,5 +1,5 @@
 import p5 from 'p5';
-import {DESIGN_WIDTH, DESIGN_HEIGHT, FRUIT_TIERS, THEME} from './config/gameConfig.js';
+import {DESIGN_WIDTH, CANVAS_HEIGHT, FRUIT_TIERS, THEME} from './config/gameConfig.js';
 import { MODES, MODE_LIST } from './config/modesConfig.js';
 import { SvgHitboxParser } from './physics/SvgHitboxParser.js';
 import { GameSession } from './core/GameSession.js';
@@ -40,11 +40,11 @@ const sketch = (p) => {
 
         const scaleFactor = Math.min(
             containerWidth / DESIGN_WIDTH,
-            containerHeight / DESIGN_HEIGHT
+            containerHeight / CANVAS_HEIGHT
         );
 
         const w = Math.max(1, Math.floor(DESIGN_WIDTH * scaleFactor));
-        const h = Math.max(1, Math.floor(DESIGN_HEIGHT * scaleFactor));
+        const h = Math.max(1, Math.floor(CANVAS_HEIGHT * scaleFactor));
 
         return {
             w,
@@ -71,7 +71,7 @@ const sketch = (p) => {
     Object.defineProperty(p, 'vMouseY', { get: getMouseY, configurable: true });
     Object.defineProperty(p, 'vTouches', { get: getVirtualTouches, configurable: true });
     Object.defineProperty(p, 'vWidth', { get: () => DESIGN_WIDTH, configurable: true });
-    Object.defineProperty(p, 'vHeight', { get: () => DESIGN_HEIGHT, configurable: true });
+    Object.defineProperty(p, 'vHeight', { get: () => CANVAS_HEIGHT, configurable: true });
 
     // ==========================================
     // 3. P5 LIFECYCLE HOOKS
@@ -184,13 +184,27 @@ const sketch = (p) => {
     // ==========================================
     // 5. INPUT HANDLING
     // ==========================================
-    p.mousePressed = () => {
+    // p5 2.x delivers mouse, pen and touch as one pointer stream through these
+    // handlers (touchStarted is never called). Mouse acts on press as before;
+    // a touch only aims while the finger is down and acts when it lifts.
+    let touchAiming = false;
+
+    const isTouch = (e) => e?.pointerType === 'touch';
+
+    p.mousePressed = (e) => {
+        if (isTouch(e)) {
+            // Ignore extra fingers; the first one aims
+            if (e.isPrimary) touchAiming = true;
+            return false; // no scrolling or compatibility mouse events
+        }
         handleUserAction();
     };
 
-    p.touchStarted = () => {
+    p.mouseReleased = (e) => {
+        if (!isTouch(e) || !e.isPrimary || !touchAiming) return;
+        touchAiming = false;
         handleUserAction();
-        return false; // prevent default scrolling behavior on mobile
+        return false;
     };
 
     p.keyPressed = () => {
