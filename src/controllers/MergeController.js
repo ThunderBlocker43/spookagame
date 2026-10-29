@@ -3,11 +3,13 @@ import { Fruit } from '../entities/Fruit.js';
 import { Particle } from '../entities/Particle.js';
 
 export class MergeController {
-    constructor(physicsWorld, scoreManager, particlesList, activeFruitsList) {
+    // onMerge(tier, isMaxTier): optional, called per merge (sound effects)
+    constructor(physicsWorld, scoreManager, particlesList, activeFruitsList, onMerge = null) {
         this.physicsWorld = physicsWorld;
         this.scoreManager = scoreManager;
         this.particlesList = particlesList;
         this.activeFruitsList = activeFruitsList;
+        this.onMerge = onMerge;
         this.pendingMerges = [];
     }
 
@@ -79,6 +81,10 @@ export class MergeController {
                 // Max tier merge bonus!
                 this.scoreManager.addScore(200);
                 this.spawnMergeParticles(spawnX, spawnY, THEME.celebrationParticle, 25);
+            }
+
+            if (this.onMerge) {
+                this.onMerge(nextTier, nextTier >= FRUIT_TIERS.length);
             }
         }
     }

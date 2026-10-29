@@ -16,8 +16,10 @@ import { GameState, GAME_STATES } from './GameState.js';
 export class GameSession {
     // random: piece RNG (seeded in Drop Battle)
     // onDrop: called after the player drops a piece
+    // onMerge(tier, isMaxTier) / onDangerStart: sound effect hooks
     // isMirror: board is a replay of someone else's game and never ends by itself
-    constructor({ random = Math.random, onDrop = null, isMirror = false } = {}) {
+    constructor({ random = Math.random, onDrop = null, onMerge = null, onDangerStart = null, isMirror = false } = {}) {
+        this.onDangerStart = onDangerStart;
         this.isMirror = isMirror;
         this.activeFruits = [];
         this.particles = [];
@@ -30,7 +32,7 @@ export class GameSession {
             this.mergeController.onFruitCollision(fruitA, fruitB, contact);
         });
 
-        this.mergeController = new MergeController(this.physicsWorld, this.scoreManager, this.particles, this.activeFruits);
+        this.mergeController = new MergeController(this.physicsWorld, this.scoreManager, this.particles, this.activeFruits, onMerge);
 
         this.dropController = new DropController(this.physicsWorld, (newFruit) => {
             this.activeFruits.push(newFruit);
@@ -58,7 +60,11 @@ export class GameSession {
                 this.activeFruits[i].update(dt);
             }
 
+            const wasSafe = this.gameState.dangerRatio === 0;
             this.gameState.checkGameOverConditions(this.activeFruits, dt);
+            if (wasSafe && this.gameState.dangerRatio > 0 && this.onDangerStart) {
+                this.onDangerStart();
+            }
 
             if (this.isMirror) {
                 // Only the danger warning is used; the real game decides when it ends

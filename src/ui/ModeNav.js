@@ -12,7 +12,7 @@ const PANEL_GAP = 24;
 const TOGGLE_SIZE = 44;
 
 export class ModeNav {
-    constructor(canvasElement, modes, { onSelect }) {
+    constructor(canvasElement, modes, { onSelect, onToggleSound, muted = false }) {
         this.canvasElement = canvasElement;
         this.onSelect = onSelect;
 
@@ -28,6 +28,7 @@ export class ModeNav {
                     <button class="modes-close" type="button" aria-label="Close game modes">×</button>
                 </header>
                 <div class="modes-list"></div>
+                <button class="modes-sound" type="button"></button>
             </section>
         `;
         document.body.append(this.root);
@@ -37,8 +38,12 @@ export class ModeNav {
             toggle: this.root.querySelector('.modes-toggle'),
             backdrop: this.root.querySelector('.modes-backdrop'),
             close: this.root.querySelector('.modes-close'),
-            list: this.root.querySelector('.modes-list')
+            list: this.root.querySelector('.modes-list'),
+            sound: this.root.querySelector('.modes-sound')
         };
+
+        this.el.sound.addEventListener('click', () => onToggleSound());
+        this.setMuted(muted);
 
         this.el.list.append(...modes.map((mode) => {
             const button = document.createElement('button');
@@ -70,6 +75,11 @@ export class ModeNav {
         window.addEventListener('resize', this.layout);
         new ResizeObserver(this.layout).observe(this.canvasElement);
         this.layout();
+    }
+
+    setMuted(muted) {
+        this.el.sound.textContent = muted ? '🔇 Sound off (M)' : '🔊 Sound on (M)';
+        this.el.sound.setAttribute('aria-pressed', String(!muted));
     }
 
     setActive(modeId) {

@@ -865,3 +865,19 @@ body.bt-match #app {
 .bt-clock-label:empty {
   display: none;
 }
+
+/* Sound toggle under the mode list */
+.modes .modes-sound {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1.5px solid #4a3366;
+  border-radius: 8px;
+  background: none;
+  color: #cec2df;
+  font-size: 12px;
+  text-align: left;
+}
+
+.modes .modes-sound[aria-pressed="false"] {
+  color: #a795be;
+}

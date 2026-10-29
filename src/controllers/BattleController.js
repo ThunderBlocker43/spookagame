@@ -8,6 +8,7 @@ import { BattleMatch, MATCH_PHASES, RESULT_REASONS, findMatchLength } from '../c
 import { BattlePanel } from '../ui/BattlePanel.js';
 import { BattleHud } from '../ui/BattleHud.js';
 import { OpponentView } from '../ui/OpponentView.js';
+import { audio, boardSoundEvents } from '../core/AudioManager.js';
 
 // ==========================================
 // BATTLE CONTROLLER (Drop Battle: lobby, invites, match lifecycle)
@@ -66,7 +67,12 @@ export class BattleController {
             onAcceptInvite: (code) => this.acceptInvite(code),
             onDeclineInvite: (code) => this.declineInvite(code),
             onSelectLength: (id) => this.selectMatchLength(id),
-            onLayout: requestResize
+            onLayout: requestResize,
+            // Battle track while a match is on screen, Classic's otherwise
+            onMatchVisibility: (visible) => {
+                if (visible) audio.setDucked(false);
+                audio.playMusic(visible ? 'battle' : 'classic');
+            }
         });
 
         // Opponent wins right away instead of waiting out the disconnect grace
@@ -301,8 +307,15 @@ export class BattleController {
     createBoards() {
         this.session = new GameSession({
             random: createSeededRandom(this.seed),
-            onDrop: (fruit) => this.onMyDrop(fruit)
+            onDrop: (fruit) => {
+                boardSoundEvents.onDrop();
+                this.onMyDrop(fruit);
+            },
+            onMerge: boardSoundEvents.onMerge,
+            onDangerStart: boardSoundEvents.onDangerStart
         });
+        this.lastCountdownSecond = null;
+        this.lastTimerStep = null;
         this.mirror = new GameSession({ random: createSeededRandom(this.seed), isMirror: true });
         this.lastSnapshotAt = 0;
         this.boardDirty = false;
@@ -339,6 +352,9 @@ export class BattleController {
                 this.panel.closeDialog();
                 this.panel.showMatch(this.opponentName);
                 break;
+            case MATCH_PHASES.PLAYING:
+                audio.play('countdownGo');
+                break;
             case MATCH_PHASES.ENDING:
                 this.endBanner = this.endBanner || 'TIME!';
                 this.freeze(this.session);
@@ -357,6 +373,7 @@ export class BattleController {
     }
 
     onResult(result) {
+        audio.play(result.outcome); // win / lose / draw
         const name = this.opponentName || 'Your opponent';
         const texts = {
             [RESULT_REASONS.KO]: result.outcome === 'win' ? `${name}'s stack overflowed!` : 'Your stack overflowed.',
@@ -451,8 +468,22 @@ export class BattleController {
 
         match.tick();
 
+        if (match.phase === MATCH_PHASES.COUNTDOWN) {
+            // 3, 2, 1 ticks (GO plays when the phase changes)
+            const second = Math.ceil(match.countdownRemainingMs / 1000);
+            if (second > 0 && second !== this.lastCountdownSecond) audio.play('countdownTick');
+            this.lastCountdownSecond = second;
+        }
+
         if (match.phase === MATCH_PHASES.PLAYING) {
             const drop = this.session.dropController;
+
+            // Ticks every half second in the last 1.5 s of the drop timer
+            const remaining = this.dropTimerMs - (Date.now() - this.turnStartedAt);
+            const step = remaining <= 1500 ? Math.ceil(remaining / 500) : null;
+            if (step !== null && step > 0 && step !== this.lastTimerStep) audio.play('timerTick');
+            this.lastTimerStep = step;
+
             if (Date.now() - this.turnStartedAt >= this.dropTimerMs) {
                 // Out of time: drop it where it's aimed
                 drop.drop();
@@ -595,6 +626,7 @@ export class BattleController {
         // Don't interrupt a lobby or match in progress
         if (this.match || this.panel.shownInviteCode || open.length === 0) return;
         this.panel.showInvite(open[0].battle_code, open[0].host_name);
+        audio.play('challenge');
     }
 
     acceptInvite(code) {

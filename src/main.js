@@ -8,6 +8,7 @@ import { UIManager } from './ui/UIManager.js';
 import { ModeNav } from './ui/ModeNav.js';
 import { LeaderboardController } from './controllers/LeaderboardController.js';
 import { BattleController } from './controllers/BattleController.js';
+import { audio, boardSoundEvents } from './core/AudioManager.js';
 
 // p5's Friendly Error System validates the arguments of every p5 call (hundreds
 // per frame here), which costs a lot of frame time on phones. Keep it for local
@@ -112,11 +113,15 @@ const sketch = (p) => {
         }
 
         // Initialize game architecture
-        classic = new GameSession();
+        classic = new GameSession(boardSoundEvents);
         uiManager = new UIManager();
         leaderboardController = new LeaderboardController(classic.scoreManager, canvas.elt);
 
-        modeNav = new ModeNav(canvas.elt, MODE_LIST, { onSelect: (mode) => selectMode(mode) });
+        modeNav = new ModeNav(canvas.elt, MODE_LIST, {
+            onSelect: (mode) => selectMode(mode),
+            onToggleSound: () => modeNav.setMuted(audio.toggleMuted()),
+            muted: audio.muted
+        });
         modeNav.setActive(MODES.CLASSIC);
 
         battleController = new BattleController({
@@ -125,7 +130,10 @@ const sketch = (p) => {
             appElement,
             canvasElement: canvas.elt,
             onEnter: () => modeNav.setActive(MODES.BATTLE),
-            onExit: () => modeNav.setActive(MODES.CLASSIC),
+            onExit: () => {
+                modeNav.setActive(MODES.CLASSIC);
+                audio.setDucked(classic.gameState.state === GAME_STATES.GAMEOVER);
+            },
             requestResize: () => p.windowResized()
         });
         leaderboardController.onChallengeFriend = (name) => battleController.challengeFriend(name);
@@ -133,6 +141,27 @@ const sketch = (p) => {
 
         // Opened from a Drop Battle invite link?
         battleController.openFromUrl();
+
+        // Starts with the first tap/click/key (browsers block sound before that);
+        // Drop Battle switches to its own track while a match is on screen
+        audio.playMusic('classic');
+
+        // Every button in the HTML panels and dialogs clicks (capture: panels stop propagation)
+        document.addEventListener('click', (e) => {
+            if (e.target.closest?.('button')) audio.play('click');
+        }, true);
+    };
+
+    // Game Over sting with the music dipped; restarting brings it back
+    const onClassicGameOver = () => {
+        audio.play('gameOver');
+        audio.setDucked(true);
+        leaderboardController.onGameOver();
+    };
+
+    const restartClassic = () => {
+        classic.restart();
+        audio.setDucked(false);
     };
 
     // ==========================================
@@ -171,7 +200,7 @@ const sketch = (p) => {
 
         // Physics & Game Logic Step (paused behind the Drop Battle lobby)
         if (!battleController.isOpen && classic.update(p.deltaTime, dt)) {
-            leaderboardController.onGameOver();
+            onClassicGameOver();
         }
 
         // Render Pass: container, fruits, particles, aim & preview
@@ -214,10 +243,17 @@ const sketch = (p) => {
     };
 
     p.keyPressed = () => {
-        if (!classic || battleController.isOpen) return;
+        if (!classic) return;
+
+        // M mutes everywhere, including during a Drop Battle match
+        if (p.key === 'm' || p.key === 'M') {
+            modeNav.setMuted(audio.toggleMuted());
+            return;
+        }
+        if (battleController.isOpen) return;
 
         if (p.key === 'r' || p.key === 'R') {
-            classic.restart();
+            restartClassic();
         } else if (p.key === 'd' || p.key === 'D' || p.key === 'h' || p.key === 'H') {
             classic.gameState.toggleHitboxDebug();
         }
@@ -235,7 +271,7 @@ const sketch = (p) => {
 
         // If clicking on the game over screen, restart
         if (gameState.state === GAME_STATES.GAMEOVER) {
-            classic.restart();
+            restartClassic();
             return;
         }
 

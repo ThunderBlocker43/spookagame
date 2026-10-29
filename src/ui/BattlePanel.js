@@ -340,6 +340,7 @@ export class BattlePanel {
         this.matchVisible = true;
         this.card.hidden = false;
         document.body.classList.add('bt-match');
+        this.handlers.onMatchVisibility?.(true);
         this.setOpponent(opponentName);
         this.setOpponentScore(0);
         this.setStatus('');
@@ -351,6 +352,7 @@ export class BattlePanel {
         this.matchVisible = false;
         this.card.hidden = true;
         document.body.classList.remove('bt-match');
+        this.handlers.onMatchVisibility?.(false);
         this.layout();
     }
 
