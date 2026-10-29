@@ -105,6 +105,15 @@ export const THEME = {
 //     offset: { x: 0, y: 0 } (relative to sprite center)
 //     scale: 1.0 (multiplier for hitbox size relative to sprite)
 // - Optionally assign `sprite: 'path/to/image.svg'` or use built-in procedural graphics
+//
+// `radius` is half the sprite's draw box. SVG sprites get a hitbox traced from their
+// silhouette, and each artwork fills a different share of its box (61-92% of the
+// width), so radius alone doesn't say how big a piece is. Radii are set so the traced
+// hitboxes (equal-area radius) grow by a steady ~21% per tier, from 10 to 68:
+//   10, 12.1, 14.6, 18.1, 21.4, 26.5, 31.3, 38.2, 46.3, 56.1, 68.2
+// That keeps every merge freeing space (two pieces' area > the next tier's) and lets
+// one of each tier fit in about a third of the board, so a careful player can keep
+// cycling big-pumpkin merges indefinitely.
 export const FRUIT_TIERS = [
     {
         tier: 0,
@@ -114,8 +123,9 @@ export const FRUIT_TIERS = [
         color: '#e63946',
         leafColor: '#2a9d8f',
         hitbox: {
-            shape: 'circle',
-            radius: 14,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -124,7 +134,7 @@ export const FRUIT_TIERS = [
     {
         tier: 1,
         name: 'rotten_cherries',
-        radius: 20,
+        radius: 15,
         score: 3,
         color: '#ff4d6d',
         leafColor: '#38b000',
@@ -140,13 +150,14 @@ export const FRUIT_TIERS = [
     {
         tier: 2,
         name: 'rotten_pear',
-        radius: 27,
+        radius: 24,
         score: 6,
         color: '#9b5de5',
         leafColor: '#70e000',
         hitbox: {
-            shape: 'circle',
-            radius: 27,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -155,7 +166,7 @@ export const FRUIT_TIERS = [
     {
         tier: 3,
         name: 'rotten_apple',
-        radius: 35,
+        radius: 21,
         score: 10,
         color: '#f77f00',
         leafColor: '#38b000',
@@ -171,13 +182,14 @@ export const FRUIT_TIERS = [
     {
         tier: 4,
         name: 'squash',
-        radius: 44,
+        radius: 30,
         score: 15,
         color: '#fb8500',
         leafColor: '#2b9348',
         hitbox: {
-            shape: 'circle',
-            radius: 44,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -186,28 +198,30 @@ export const FRUIT_TIERS = [
     {
         tier: 5,
         name: 'pumpkin',
-        radius: 54,
+        radius: 30,
         score: 21,
         color: '#d90429',
         leafColor: '#55a630',
         hitbox: {
-            shape: 'circle',
-            radius: 54,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
         sprite: 'assets/pumpkin.svg'
     },
     {
-        tier: 7,
+        tier: 6,
         name: 'vampire',
-        radius: 80,
+        radius: 43,
         score: 28,
         color: '#d4e09b',
         leafColor: '#2d6a4f',
         hitbox: {
-            shape: 'circle',
-            radius: 64,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -216,13 +230,14 @@ export const FRUIT_TIERS = [
     {
         tier: 7,
         name: 'weird fruit',
-        radius: 75,
+        radius: 59,
         score: 36,
         color: '#ffb5a7',
         leafColor: '#40916c',
         hitbox: {
-            shape: 'circle',
-            radius: 75,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -231,13 +246,14 @@ export const FRUIT_TIERS = [
     {
         tier: 8,
         name: 'rounded pumpkin',
-        radius: 87,
+        radius: 54,
         score: 45,
         color: '#ffbe0b',
         leafColor: '#1b4332',
         hitbox: {
-            shape: 'circle',
-            radius: 87,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -246,13 +262,14 @@ export const FRUIT_TIERS = [
     {
         tier: 9,
         name: 'another pumpkin',
-        radius: 100,
+        radius: 70,
         score: 55,
         color: '#90be6d',
         leafColor: '#1b4332',
         hitbox: {
-            shape: 'circle',
-            radius: 100,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
@@ -261,13 +278,14 @@ export const FRUIT_TIERS = [
     {
         tier: 10,
         name: 'big pumpkin',
-        radius: 115,
+        radius: 74,
         score: 66,
         color: '#2d6a4f',
         leafColor: '#1b4332',
         hitbox: {
-            shape: 'circle',
-            radius: 115,
+            shape: 'svg',
+            samples: 28,
+            smoothingPasses: 2,
             offset: { x: 0, y: 0 },
             scale: 1.0
         },
