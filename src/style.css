@@ -821,3 +821,36 @@ body.bt-match #app {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Drop Battle match length picker (same look as the leaderboard tabs) */
+.bt-lengths .lb-tab {
+  padding: 6px 2px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #a795be;
+  font-size: 12px;
+}
+
+.bt-lengths .lb-tab[aria-selected="true"] {
+  background-color: #4a3366;
+  color: #f8f4ff;
+  font-weight: bold;
+}
+
+.bt-clock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.bt-clock-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a795be;
+}
+
+.bt-clock-label:empty {
+  display: none;
+}
