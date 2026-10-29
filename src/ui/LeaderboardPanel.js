@@ -4,19 +4,11 @@
 // Desktop: fixed panel to the left of the canvas. When there is no room on the
 // left (phones), it collapses into a toggle button + slide-in drawer.
 
+import { isolateFromGame } from './domUtils.js';
+
 const PANEL_WIDTH = 230;
 const PANEL_GAP = 24;
 const TOGGLE_SIZE = 44;
-
-// p5 listens for these on window; stop them so the game ignores panel/dialog input
-const ISOLATED_EVENTS = [
-    'pointerdown', 'pointerup', 'pointercancel', 'pointermove',
-    'click', 'dblclick', 'wheel', 'keydown', 'keyup', 'keypress'
-];
-
-const isolateFromGame = (element) => {
-    ISOLATED_EVENTS.forEach((type) => element.addEventListener(type, (e) => e.stopPropagation()));
-};
 
 const createCell = (className, text) => {
     const cell = document.createElement('span');
@@ -211,11 +203,30 @@ export class LeaderboardPanel {
                 if (entry.is_me) {
                     item.classList.add('lb-entry--me');
                 }
+                const name = createCell('lb-name', entry.username);
+                if (entry.online && !entry.is_me) {
+                    name.classList.add('lb-name--online');
+                    name.title = 'Online now';
+                }
                 item.append(
                     createCell('lb-rank', `${i + 1}`),
-                    createCell('lb-name', entry.username),
+                    name,
                     createCell('lb-score', entry.score)
                 );
+
+                // Drop Battle challenge
+                if (!entry.is_me) {
+                    const challenge = document.createElement('button');
+                    challenge.className = 'lb-challenge';
+                    challenge.type = 'button';
+                    challenge.textContent = '⚔️';
+                    challenge.title = `Challenge ${entry.username} to Drop Battle`;
+                    challenge.setAttribute('aria-label', `Challenge ${entry.username} to Drop Battle`);
+                    challenge.addEventListener('click', () => this.handlers.onChallengeFriend(entry.username));
+                    item.append(challenge);
+                } else {
+                    item.append(createCell('lb-remove-spacer', ''));
+                }
 
                 if (!entry.is_me) {
                     const remove = document.createElement('button');

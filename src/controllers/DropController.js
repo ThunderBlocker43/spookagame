@@ -2,9 +2,11 @@ import { DROP_CONFIG, CONTAINER_CONFIG, FRUIT_TIERS, THEME } from '../config/gam
 import { Fruit } from '../entities/Fruit.js';
 
 export class DropController {
-    constructor(physicsWorld, onFruitDropped) {
+    // random: () => [0, 1). Drop Battle passes a seeded one so both players get the same pieces.
+    constructor(physicsWorld, onFruitDropped, random = Math.random) {
         this.physicsWorld = physicsWorld;
         this.onFruitDropped = onFruitDropped;
+        this.random = random;
         this.lastDropTime = 0;
 
         this.currentTier = this.getRandomTier();
@@ -16,7 +18,7 @@ export class DropController {
 
     getRandomTier() {
         const pool = DROP_CONFIG.initialSpawnTiers || [0, 1, 2];
-        const idx = Math.floor(Math.random() * pool.length);
+        const idx = Math.floor(this.random() * pool.length);
         return pool[idx];
     }
 

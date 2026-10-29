@@ -1,13 +1,11 @@
 import { LEADERBOARD_CONFIG } from '../config/leaderboardConfig.js';
+import { SUPABASE_URL, SUPABASE_KEY } from './supabaseEnv.js';
 
 // ==========================================
 // LEADERBOARD SERVICE (Supabase RPC over fetch)
 // ==========================================
 // Only the public "publishable"/anon key is used. It can do nothing except call
 // the validated, rate-limited functions defined in supabase/schema.sql.
-
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
 export class LeaderboardService {
     get isConfigured() {
