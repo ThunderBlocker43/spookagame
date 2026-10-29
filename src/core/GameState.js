@@ -47,7 +47,10 @@ export class GameState {
             // Only evaluate fruits that have been in play for at least 1.5 seconds (grace period for freshly dropped fruit)
             const ageMs = now - fruit.createdAt;
             if (ageMs > 1500) {
-                const topEdge = body.position.y - fruit.config.radius;
+                // Highest point of the actual collision shape, as currently rotated.
+                // (position - config.radius assumed an upright circle the size of the
+                // sprite box and fired up to ~40px early for tall/tilted pieces.)
+                const topEdge = body.bounds.min.y;
                 const isStationary = Math.abs(body.velocity.y) < 1.0 && Math.abs(body.velocity.x) < 1.5;
 
                 if (topEdge < dangerLineY && isStationary) {
