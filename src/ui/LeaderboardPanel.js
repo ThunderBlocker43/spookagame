@@ -18,6 +18,19 @@ const isolateFromGame = (element) => {
     ISOLATED_EVENTS.forEach((type) => element.addEventListener(type, (e) => e.stopPropagation()));
 };
 
+const createCell = (className, text) => {
+    const cell = document.createElement('span');
+    cell.className = className;
+    cell.textContent = text;
+    return cell;
+};
+
+const formatDate = (isoString) => new Date(isoString).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+});
+
 export class LeaderboardPanel {
     constructor(canvasElement, handlers) {
         this.canvasElement = canvasElement;
@@ -33,6 +46,12 @@ export class LeaderboardPanel {
                     <h2 class="lb-title">Leaderboard</h2>
                     <button class="lb-close" type="button" aria-label="Close leaderboard">×</button>
                 </header>
+                <div class="lb-tabs" role="tablist" aria-label="Leaderboard views"></div>
+                <form class="lb-friend-form" novalidate hidden>
+                    <input class="lb-friend-input" type="text" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Friend's name" aria-label="Friend's name">
+                    <button class="lb-friend-add" type="submit">Add</button>
+                </form>
+                <p class="lb-error lb-friend-error" role="alert"></p>
                 <ol class="lb-list"></ol>
                 <p class="lb-status"></p>
                 <div class="lb-footer">
@@ -69,6 +88,11 @@ export class LeaderboardPanel {
             toggle: this.root.querySelector('.lb-toggle'),
             backdrop: this.root.querySelector('.lb-backdrop'),
             close: this.root.querySelector('.lb-close'),
+            tabs: this.root.querySelector('.lb-tabs'),
+            friendForm: this.root.querySelector('.lb-friend-form'),
+            friendInput: this.root.querySelector('.lb-friend-input'),
+            friendAdd: this.root.querySelector('.lb-friend-add'),
+            friendError: this.root.querySelector('.lb-friend-error'),
             list: this.root.querySelector('.lb-list'),
             status: this.root.querySelector('.lb-status'),
             player: this.root.querySelector('.lb-player'),
@@ -83,10 +107,25 @@ export class LeaderboardPanel {
             save: this.dialog.querySelector('.lb-save')
         };
 
+        this.el.tabs.append(...this.handlers.boards.map((board) => {
+            const tab = document.createElement('button');
+            tab.className = 'lb-tab';
+            tab.type = 'button';
+            tab.setAttribute('role', 'tab');
+            tab.dataset.board = board.id;
+            tab.textContent = board.label;
+            tab.addEventListener('click', () => this.handlers.onSelectBoard(board.id));
+            return tab;
+        }));
+
         this.el.toggle.addEventListener('click', () => this.setDrawerOpen(!this.root.classList.contains('lb--open')));
         this.el.close.addEventListener('click', () => this.setDrawerOpen(false));
         this.el.backdrop.addEventListener('click', () => this.setDrawerOpen(false));
         this.el.join.addEventListener('click', () => this.handlers.onJoin());
+        this.el.friendForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.submitFriend();
+        });
         this.el.reroll.addEventListener('click', () => {
             this.el.input.value = this.handlers.suggestName();
             this.el.error.textContent = '';
@@ -132,7 +171,20 @@ export class LeaderboardPanel {
         this.el.toggle.setAttribute('aria-expanded', String(open));
     }
 
-    renderScores(entries, currentUsername) {
+    // Highlight the active tab; the friend form only shows on Friends for named players
+    showBoard(board, hasUsername) {
+        this.el.tabs.querySelectorAll('.lb-tab').forEach((tab) => {
+            tab.setAttribute('aria-selected', String(tab.dataset.board === board));
+        });
+
+        const showFriendForm = board === 'friends' && hasUsername;
+        if (this.el.friendForm.hidden === showFriendForm) {
+            this.el.friendForm.hidden = !showFriendForm;
+            this.el.friendError.textContent = '';
+        }
+    }
+
+    renderScores(entries, currentUsername, emptyText = 'No scores yet. Be the first!') {
         this.el.list.replaceChildren(
             ...entries.map((entry, i) => {
                 const item = document.createElement('li');
@@ -140,24 +192,71 @@ export class LeaderboardPanel {
                 if (currentUsername && entry.username.toLowerCase() === currentUsername.toLowerCase()) {
                     item.classList.add('lb-entry--me');
                 }
-
-                const rank = document.createElement('span');
-                rank.className = 'lb-rank';
-                rank.textContent = `${i + 1}`;
-
-                const name = document.createElement('span');
-                name.className = 'lb-name';
-                name.textContent = entry.username;
-
-                const score = document.createElement('span');
-                score.className = 'lb-score';
-                score.textContent = entry.score;
-
-                item.append(rank, name, score);
+                item.append(
+                    createCell('lb-rank', `${i + 1}`),
+                    createCell('lb-name', entry.username),
+                    createCell('lb-score', entry.score)
+                );
                 return item;
             })
         );
-        this.setStatus(entries.length ? '' : 'No scores yet. Be the first!');
+        this.setStatus(entries.length ? '' : emptyText);
+    }
+
+    renderFriends(entries) {
+        this.el.list.replaceChildren(
+            ...entries.map((entry, i) => {
+                const item = document.createElement('li');
+                item.className = 'lb-entry lb-entry--friend';
+                if (entry.is_me) {
+                    item.classList.add('lb-entry--me');
+                }
+                item.append(
+                    createCell('lb-rank', `${i + 1}`),
+                    createCell('lb-name', entry.username),
+                    createCell('lb-score', entry.score)
+                );
+
+                if (!entry.is_me) {
+                    const remove = document.createElement('button');
+                    remove.className = 'lb-remove';
+                    remove.type = 'button';
+                    remove.textContent = '×';
+                    remove.title = `Remove ${entry.username}`;
+                    remove.setAttribute('aria-label', `Remove ${entry.username}`);
+                    remove.addEventListener('click', () => {
+                        remove.disabled = true;
+                        this.handlers.onRemoveFriend(entry.username);
+                    });
+                    item.append(remove);
+                } else {
+                    item.append(createCell('lb-remove-spacer', ''));
+                }
+                return item;
+            })
+        );
+        this.setStatus(entries.length > 1 ? '' : 'Add friends by their exact name.');
+    }
+
+    renderHistory(entries) {
+        this.el.list.replaceChildren(
+            ...entries.map((entry) => {
+                const item = document.createElement('li');
+                item.className = 'lb-entry lb-entry--history';
+                const date = createCell('lb-name', formatDate(entry.achieved_at));
+                // Season label stays hidden until the seasonal board is switched on
+                if (this.handlers.showSeason) {
+                    date.append(createCell('lb-season', entry.season_name || entry.season));
+                }
+                item.append(date, createCell('lb-score', entry.score));
+                return item;
+            })
+        );
+        this.setStatus(entries.length ? '' : 'No high scores yet. Finish a game!');
+    }
+
+    get statusText() {
+        return this.el.status.textContent;
     }
 
     setStatus(text) {
@@ -198,6 +297,20 @@ export class LeaderboardPanel {
             this.el.error.textContent = error;
         } else {
             this.closeNameDialog();
+        }
+    }
+
+    async submitFriend() {
+        this.el.friendAdd.disabled = true;
+        this.el.friendError.textContent = '';
+
+        const error = await this.handlers.onAddFriend(this.el.friendInput.value);
+
+        this.el.friendAdd.disabled = false;
+        if (error) {
+            this.el.friendError.textContent = error;
+        } else {
+            this.el.friendInput.value = '';
         }
     }
 }
