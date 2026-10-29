@@ -8,6 +8,7 @@ import { MergeController } from './controllers/MergeController.js';
 import { ScoreManager } from './core/ScoreManager.js';
 import { GameState, GAME_STATES } from './core/GameState.js';
 import { UIManager } from './ui/UIManager.js';
+import { LeaderboardController } from './controllers/LeaderboardController.js';
 
 const sketch = (p) => {
     const appElement = document.getElementById('app');
@@ -23,6 +24,7 @@ const sketch = (p) => {
     let mergeController;
     let gameState;
     let uiManager;
+    let leaderboardController;
 
     const activeFruits = [];
     const particles = [];
@@ -109,6 +111,7 @@ const sketch = (p) => {
         scoreManager = new ScoreManager();
         container = new Container();
         uiManager = new UIManager();
+        leaderboardController = new LeaderboardController(scoreManager, canvas.elt);
 
         // Setup physics with merge collision listener
         physicsWorld = new PhysicsWorld((fruitA, fruitB, contact) => {
@@ -145,6 +148,10 @@ const sketch = (p) => {
             }
 
             gameState.checkGameOverConditions(activeFruits, dt);
+
+            if (gameState.state === GAME_STATES.GAMEOVER) {
+                leaderboardController.onGameOver();
+            }
         }
 
         // Update Particle system
