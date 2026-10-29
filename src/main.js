@@ -1,5 +1,5 @@
 import p5 from 'p5';
-import {DESIGN_WIDTH, CANVAS_HEIGHT, FRUIT_TIERS, THEME} from './config/gameConfig.js';
+import {DESIGN_WIDTH, CANVAS_HEIGHT, MAX_PIXEL_DENSITY, FRUIT_TIERS, THEME} from './config/gameConfig.js';
 import { MODES, MODE_LIST } from './config/modesConfig.js';
 import { SvgHitboxParser } from './physics/SvgHitboxParser.js';
 import { GameSession } from './core/GameSession.js';
@@ -8,6 +8,11 @@ import { UIManager } from './ui/UIManager.js';
 import { ModeNav } from './ui/ModeNav.js';
 import { LeaderboardController } from './controllers/LeaderboardController.js';
 import { BattleController } from './controllers/BattleController.js';
+
+// p5's Friendly Error System validates the arguments of every p5 call (hundreds
+// per frame here), which costs a lot of frame time on phones. Keep it for local
+// development only.
+p5.disableFriendlyErrors = import.meta.env.PROD;
 
 const sketch = (p) => {
     const appElement = document.getElementById('app');
@@ -101,6 +106,7 @@ const sketch = (p) => {
         scale = s;
 
         const canvas = p.createCanvas(w, h);
+        p.pixelDensity(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_DENSITY));
         if (appElement) {
             canvas.parent(appElement);
         }

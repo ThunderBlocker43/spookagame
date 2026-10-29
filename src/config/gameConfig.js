@@ -11,6 +11,11 @@ export const DESIGN_HEIGHT = 640;         // Board area (header + container); ga
 export const GUIDE_HEIGHT = 46;
 export const CANVAS_HEIGHT = DESIGN_HEIGHT + GUIDE_HEIGHT;
 
+// Canvas backing-store resolution cap. p5 defaults to ceil(devicePixelRatio),
+// i.e. 3-4x on high-end phones (up to ~5M pixels redrawn every frame). 2x stays
+// sharp (the sprites are rasterised well below that anyway) at a fraction of the cost.
+export const MAX_PIXEL_DENSITY = 2;
+
 export const PHYSICS_CONFIG = {
     gravity: 1.4,             // World gravity scale (Y axis)
     friction: 0.18,           // Surface friction for realistic rolling and stacking
